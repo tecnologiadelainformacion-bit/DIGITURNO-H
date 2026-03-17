@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<body>
+<h1>Sacar Turno</h1>
+<button onclick="crear()">Nuevo Turno</button>
+<h2 id="t"></h2>
+<script>
+const API="http://127.0.0.1:8000";
+async function crear(){
+ let r=await fetch(API+"/turno",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({})});
+ let d=await r.json();
+ document.getElementById("t").innerText=d.numero;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<body style="font-size:50px;text-align:center">
+<h1>Pantalla</h1>
+<h2 id="turno"></h2>
+<script>
+let ws=new WebSocket("ws://127.0.0.1:8000/ws");
+ws.onmessage=(e)=>{
+ let msg=e.data.split(":");
+ if(msg[0]=="llamado"){
+   document.getElementById("turno").innerText=msg[1]+" -> M"+msg[2];
+ }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<body>
+<h1>Administrador</h1>
+<button onclick="sig()">Llamar siguiente</button>
+<h2 id="t"></h2>
+<script>
+const API="http://127.0.0.1:8000";
+async function sig(){
+ let r=await fetch(API+"/siguiente",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({modulo:"1"})});
+ let d=await r.json();
+ document.getElementById("t").innerText=d.numero+" -> M"+d.modulo;
+}
+</script>
+</body>
+</html>
