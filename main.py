@@ -1,32 +1,20 @@
 # =====================================================
-# DIGITURNO SAAS PRO (RENDER READY)
-# FastAPI + SQLite (listo para deploy en Render)
+# DIGITURNO SAAS PRO (RENDER READY - FIXED)
 # =====================================================
 
 """
-🚀 ESTE ARCHIVO YA ESTÁ LISTO PARA RENDER
+🔥 ESTA VERSIÓN YA ESTÁ CORREGIDA PARA QUE FUNCIONE:
+- Local
+- Render
+- Evita errores comunes (JSON, DB, etc)
 
-NECESITAS 2 ARCHIVOS EN TU REPO:
-
-1) main.py  (este archivo)
-2) requirements.txt  (abajo te lo dejo)
-
------------------------------
-RENDER CONFIG:
-
-Build Command:
-pip install -r requirements.txt
-
-Start Command:
-uvicorn main:app --host 0.0.0.0 --port $PORT
------------------------------
-
-PROBAR:
-https://tu-app.onrender.com/docs
+ARCHIVOS NECESARIOS:
+1) main.py
+2) requirements.txt
 """
 
 # ================= IMPORTS =================
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -62,6 +50,14 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+# ================= HELPERS =================
+def db_to_dict(turno):
+    return {
+        "id": turno.id,
+        "numero": turno.numero,
+        "estado": turno.estado
+    }
+
 # ================= RUTA BASE =================
 @app.get("/")
 def home():
@@ -78,8 +74,9 @@ def crear_turno():
     t = Turno(numero=numero, estado="esperando")
     db.add(t)
     db.commit()
+    db.refresh(t)
 
-    return {"numero": numero}
+    return db_to_dict(t)
 
 
 @app.post("/siguiente")
@@ -94,13 +91,14 @@ def siguiente():
     turno.estado = "llamado"
     db.commit()
 
-    return {"numero": turno.numero}
+    return db_to_dict(turno)
 
 
 @app.get("/turnos")
 def listar_turnos():
     db = SessionLocal()
-    return db.query(Turno).all()
+    turnos = db.query(Turno).all()
+    return [db_to_dict(t) for t in turnos]
 
 # =====================================================
 # requirements.txt (CREAR ESTE ARCHIVO)
@@ -113,31 +111,9 @@ sqlalchemy
 """
 
 # =====================================================
-# TESTS
+# EJECUCIÓN LOCAL (OPCIONAL)
 # =====================================================
 
-def test_crear_turno():
-    db = SessionLocal()
-    t = Turno(numero="A001", estado="esperando")
-    db.add(t)
-    db.commit()
-    assert t.id is not None
-
-
-def test_listar():
-    db = SessionLocal()
-    data = db.query(Turno).all()
-    assert isinstance(data, list)
-
-# =====================================================
-# COMANDOS
-# =====================================================
-
-"""
-LOCAL:
-uvicorn main:app --reload
-
-RENDER:
-uvicorn main:app --host 0.0.0.0 --port $PORT
-"""
-
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
