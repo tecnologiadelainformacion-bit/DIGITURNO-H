@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - Digiturno</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 font-sans">
+
+    <nav class="bg-slate-900 text-white p-4 shadow-md">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Digiturno SaaS <span class="text-blue-400">Pro</span></h1>
+            <span class="text-slate-400">Panel del Operador - PC</span>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-6 md:p-12">
+        <div class="grid md:grid-cols-2 gap-8">
+            
+            <div class="bg-white p-8 rounded-xl shadow-lg border border-slate-200">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6 border-b pb-4">Acciones Disponibles</h2>
+                
+                <div class="space-y-6">
+                    <button id="btn-generar" class="w-full bg-slate-800 hover:bg-slate-700 text-white text-lg font-semibold py-4 px-6 rounded-lg transition duration-200 flex items-center justify-center gap-3">
+                        ➕ Generar Nuevo Turno
+                    </button>
+                    
+                    <button id="btn-siguiente" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-3xl font-bold py-8 px-6 rounded-lg transition duration-200 transform hover:scale-105 flex items-center justify-center gap-4 shadow-xl">
+                        🔔 LLAMAR SIGUIENTE
+                    </button>
+                </div>
+                
+                <div id="api-status" class="mt-8 text-center text-sm text-slate-500 italic">
+                    Esperando respuesta de API...
+                </div>
+            </div>
+
+            <div class="bg-white p-8 rounded-xl shadow-lg border border-slate-200">
+                <h2 class="text-2xl font-bold text-slate-800 mb-6 border-b pb-4">Estado de la Fila (Real-Time)</h2>
+                
+                <div class="flex flex-col items-center justify-center h-full gap-6">
+                    <div class="text-center w-full bg-slate-100 p-6 rounded-lg border">
+                        <div class="text-sm uppercase tracking-wider text-slate-500 font-medium">Turno Actual en Pantalla</div>
+                        <div id="stat-actual" class="text-7xl font-black text-blue-600">--</div>
+                    </div>
+                    
+                    <div class="text-center w-full bg-yellow-50 p-6 rounded-lg border border-yellow-200">
+                        <div class="text-sm uppercase tracking-wider text-yellow-700 font-medium">Personas Esperando</div>
+                        <div id="stat-espera" class="text-7xl font-black text-yellow-600">--</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="mt-12 bg-white p-6 rounded-xl shadow border-l-4 border-red-500">
+            <h3 class="text-lg font-bold text-red-700 mb-4">Administración del Sistema</h3>
+            <p class="text-slate-600 mb-4 text-sm">Esta acción borrará todos los turnos del día y reseteará el contador.</p>
+            <button id="btn-reset" class="bg-red-100 text-red-700 px-4 py-2 rounded hover:bg-red-200 text-sm font-medium">
+                Borrar todos los turnos y reiniciar
+            </button>
+        </div>
+
+    </main>
+
+    <script>
+        // CONFIGURACIÓN (Cambia esto al desplegar en Render)
+        const BASE_URL = "https://digiturno-h-2.onrender.com"; 
+	const WS_URL = "wss://digiturno-h-2.onrender.com/ws";
+
+        // Elementos DOM
+        const btnGenerar = document.getElementById('btn-generar');
+        const btnSiguiente = document.getElementById('btn-siguiente');
+        const btnReset = document.getElementById('btn-reset');
+        const apiStatus = document.getElementById('api-status');
+        const statActual = document.getElementById('stat-actual');
+        const statEspera = document.getElementById('stat-espera');
+
+        // ================= LLAMADAS API (POST) =================
+
+        // 1. Generar Nuevo Turno
+        btnGenerar.addEventListener('click', async () => {
+            try {
+                const response = await fetch(`${BASE_URL}/turno`, { method: 'POST' });
+                const data = await response.json();
+                apiStatus.innerHTML = `<span class="text-slate-800">✅ Turno generado: <b>${data.numero}</b></span>`;
+            } catch (error) {
+                apiStatus.innerText = "❌ Error al conectar con la API.";
+            }
+        });
+
+        // 2. Llamar Siguiente
+        btnSiguiente.addEventListener('click', async () => {
+            try {
+                const response = await fetch(`${BASE_URL}/siguiente`, { method: 'POST' });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    apiStatus.innerHTML = `<span class="text-yellow-600">⚠️ ${errorData.detail}</span>`;
+                    return;
+                }
+                const data = await response.json();
+                apiStatus.innerHTML = `<span class="text-blue-700">🔔 Llamando a <b>${data.numero}</b>...</span>`;
+            } catch (error) {
+                apiStatus.innerText = "❌ Error al conectar con la API.";
+            }
+        });
+
+        // 3. Reset (Admin)
+        btnReset.addEventListener('click', async () => {
+            if (!confirm("¿Estás seguro? Se borrará TODO.")) return;
+            try {
+                await fetch(`${BASE_URL}/reset`, { method: 'DELETE' });
+                apiStatus.innerText = "⚠️ Sistema reiniciado.";
+                statActual.innerText = "--";
+                statEspera.innerText = "--";
+            } catch (error) {
+                apiStatus.innerText = "❌ Error en reset.";
+            }
+        });
+
+        // ================= WEBSOCKET (Real-Time Status) =================
+        const socket = new WebSocket(WS_URL);
+
+        socket.onopen = () => {
+            console.log("Panel conectado al WebSocket.");
+            // Al conectar, pedimos el estado inicial
+            actualizarContadores(); 
+        };
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            // Si algo cambia en el sistema, actualizamos contadores
+            if (data.evento === "llamar_turno" || data.evento === "nuevo_turno") {
+                actualizarContadores();
+                // Si llaman, mostramos cuál es el actual
+                if (data.evento === "llamar_turno") {
+                    statActual.innerText = data.numero;
+                    statActual.classList.add('animate-pulse');
+                    setTimeout(() => statActual.classList.remove('animate-pulse'), 1000);
+                }
+            }
+        };
+
+        // Función para consultar los contadores a la API (GET)
+        async function actualizarContadores() {
+            try {
+                const response = await fetch(`${BASE_URL}/turnos`);
+                const turnos = await response.json();
+
+                // Filtrar datos
+                const llamados = turnos.filter(t => t.estado === 'llamado');
+                const esperando = turnos.filter(t => t.estado === 'esperando');
+
+                // Actualizar interfaz
+                if (llamados.length > 0) {
+                    // El último llamado es el actual
+                    statActual.innerText = llamados[llamados.length - 1].numero;
+                } else {
+                    statActual.innerText = "--";
+                }
+                
+                statEspera.innerText = esperando.length;
+
+            } catch (error) {
+                console.error("Error cargando contadores:", error);
+            }
+        }
+    </script>
+</body>
+</html>
