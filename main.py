@@ -20,7 +20,7 @@ def abrir_pantalla():
 # Ruta para el panel del operador
 @app.get("/operador")
 def abrir_panel():
-    return FileResponse("operador.html")
+    return FileResponse("controlr.html")
 
 # ================= CONFIG & DB =================
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./digiturno.db")
