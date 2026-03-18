@@ -5,6 +5,22 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 import os
 import json
+from fastapi.responses import FileResponse
+
+# Ruta principal: Muestra el menú de inicio
+@app.get("/")
+def home():
+    return FileResponse("home.html")
+
+# Ruta para la pantalla de la TV
+@app.get("/pantalla")
+def abrir_pantalla():
+    return FileResponse("index.html")
+
+# Ruta para el panel del operador
+@app.get("/operador")
+def abrir_panel():
+    return FileResponse("operador.html")
 
 # ================= CONFIG & DB =================
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./digiturno.db")
