@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pantalla de Turnos - Digiturno Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse-bg {
+            0% { background-color: #1e40af; }
+            50% { background-color: #1d4ed8; }
+            100% { background-color: #1e40af; }
+        }
+        .llamar-anim { animation: pulse-bg 1s infinite; }
+    </style>
+</head>
+<body class="bg-slate-900 text-white font-sans overflow-hidden">
+
+    <div class="flex h-screen">
+        <div id="pantalla-principal" class="flex-1 flex flex-col items-center justify-center border-r-4 border-slate-800 transition-all duration-500">
+            <h1 class="text-4xl uppercase tracking-widest text-slate-400 mb-4">Turno Actual</h1>
+            <div id="numero-grande" class="text-[20rem] font-black leading-none text-blue-500">
+                --
+            </div>
+            <div id="mensaje-estado" class="text-3xl text-slate-500 italic mt-4">
+                Esperando nuevo turno...
+            </div>
+        </div>
+
+        <div class="w-1/4 bg-slate-800 p-8">
+            <h2 class="text-2xl font-bold border-b-2 border-slate-700 pb-4 mb-6 text-center">Últimos Llamados</h2>
+            <ul id="lista-historial" class="space-y-4 text-4xl font-semibold text-slate-400">
+                </ul>
+        </div>
+    </div>
+
+    <script>
+        // CAMBIA ESTA URL por la de tu app en Render (ej: wss://tu-app.onrender.com/ws)
+        const WS_URL = "wss://digiturno-h.onrender.com/ws"; 
+        const socket = new WebSocket(WS_URL);
+
+        const numeroDisplay = document.getElementById('numero-grande');
+        const listaHistorial = document.getElementById('lista-historial');
+        const pantallaPrincipal = document.getElementById('pantalla-principal');
+
+        socket.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            if (data.evento === "llamar_turno") {
+                actualizarPantalla(data.numero);
+                hablarTurno(data.numero);
+            }
+        };
+
+        function actualizarPantalla(numero) {
+            // Efecto visual de llamado
+            pantallaPrincipal.classList.add('llamar-anim');
+            numeroDisplay.innerText = numero;
+            numeroDisplay.classList.replace('text-blue-500', 'text-white');
+
+            // Agregar al historial (máximo 5)
+            const nuevoItem = document.createElement('li');
+            nuevoItem.className = "bg-slate-700 p-4 rounded-lg text-center animate-bounce";
+            nuevoItem.innerText = numero;
+            listaHistorial.prepend(nuevoItem);
+            
+            if (listaHistorial.children.length > 5) {
+                listaHistorial.lastElementChild.remove();
+            }
+
+            // Quitar animación después de 5 segundos
+            setTimeout(() => {
+                pantallaPrincipal.classList.remove('llamar-anim');
+                numeroDisplay.classList.replace('text-white', 'text-blue-500');
+            }, 5000);
+        }
+
+        function hablarTurno(numero) {
+            const synth = window.speechSynthesis;
+            const utterThis = new SpeechSynthesisUtterance(`Turno ${numero}, favor acercarse a módulo`);
+            utterThis.lang = 'es-ES';
+            utterThis.rate = 0.9; // Un poco más lento para que se entienda mejor
+            synth.speak(utterThis);
+        }
+
+        socket.onclose = () => console.log("Conexión perdida. Reintentando...");
+    </script>
+</body>
+</html>
