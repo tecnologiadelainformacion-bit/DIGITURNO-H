@@ -1,44 +1,48 @@
-# =====================================================
-# DIGITURNO SAAS PRO (RENDER READY - FIXED)
-# =====================================================
-
-"""
-🔥 ESTA VERSIÓN YA ESTÁ CORREGIDA PARA QUE FUNCIONE:
-- Local
-- Render
-- Evita errores comunes (JSON, DB, etc)
-
-ARCHIVOS NECESARIOS:
-1) main.py
-2) requirements.txt
-"""
-
-# ================= IMPORTS =================
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
 import os
+import json
 
-# ================= CONFIG =================
+# ================= CONFIG & DB =================
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./digiturno.db")
-
-# ================= DB =================
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-)
-SessionLocal = sessionmaker(bind=engine)
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# ================= MODELO =================
 class Turno(Base):
     __tablename__ = "turnos"
-    id = Column(Integer, primary_key=True)
-    numero = Column(String)
-    estado = Column(String)
+    id = Column(Integer, primary_key=True, index=True)
+    numero = Column(String, unique=True)
+    estado = Column(String, default="esperando")
 
-Base.metadata.create_all(engine)
+Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try: yield db
+    finally: db.close()
+
+# ================= GESTOR DE WEBSOCKETS =================
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        # Envía el mensaje a todos los conectados
+        for connection in self.active_connections:
+            await connection.send_json(message)
+
+manager = ConnectionManager()
 
 # ================= APP =================
 app = FastAPI()
@@ -47,102 +51,56 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
-# ================= HELPERS =================
-def db_to_dict(turno):
-    return {
-        "id": turno.id,
-        "numero": turno.numero,
-        "estado": turno.estado
-    }
+# ================= ENDPOINTS =================
 
-# ================= RUTA BASE =================
 @app.get("/")
 def home():
-    return {"msg": "Digiturno API funcionando"}
+    return {"msg": "Digiturno Real-Time API"}
 
-# ================= ENDPOINTS =================
 @app.post("/turno")
-def crear_turno():
-    db = SessionLocal()
-
-    count = db.query(Turno).count()
-    numero = "A" + str(count + 1).zfill(3)
-
-    t = Turno(numero=numero, estado="esperando")
+async def crear_turno(db: Session = Depends(get_db)):
+    last_turno = db.query(Turno).order_by(Turno.id.desc()).first()
+    next_id = (last_turno.id + 1) if last_turno else 1
+    nuevo_numero = f"A{str(next_id).zfill(3)}"
+    
+    t = Turno(numero=nuevo_numero, estado="esperando")
     db.add(t)
     db.commit()
-    db.refresh(t)
-
-    return db_to_dict(t)
-
+    
+    # Notificar a las pantallas que hay un nuevo turno en cola (opcional)
+    await manager.broadcast({"evento": "nuevo_turno", "numero": nuevo_numero})
+    
+    return {"numero": nuevo_numero}
 
 @app.post("/siguiente")
-def siguiente():
-    db = SessionLocal()
-
-    turno = db.query(Turno).filter_by(estado="esperando").first()
+async def llamar_siguiente(db: Session = Depends(get_db)):
+    turno = db.query(Turno).filter(Turno.estado == "esperando").order_by(Turno.id.asc()).first()
 
     if not turno:
-        return {"msg": "sin turnos"}
+        raise HTTPException(status_code=404, detail="No hay turnos")
 
     turno.estado = "llamado"
     db.commit()
 
-    return db_to_dict(turno)
+    # 🔥 NOTIFICACIÓN REAL-TIME: La pantalla sonará y mostrará el número
+    await manager.broadcast({
+        "evento": "llamar_turno",
+        "numero": turno.numero,
+        "msg": f"Turno {turno.numero}, por favor pase a módulo."
+    })
 
+    return {"numero": turno.numero}
 
-@app.get("/turnos")
-def listar_turnos():
-    db = SessionLocal()
-    turnos = db.query(Turno).all()
-    return [db_to_dict(t) for t in turnos]
-
-# =====================================================
-# requirements.txt (CREAR ESTE ARCHIVO)
-# =====================================================
-
-# ⚠️ IMPORTANTE: crea un archivo REAL llamado requirements.txt con este contenido:
-# (NO lo dejes dentro de este .py)
-#
-# fastapi
-# uvicorn
-# sqlalchemy
-
-# =====================================================
-# TESTS (IMPORTANTE PARA RENDER / GITHUB)
-# =====================================================
-
-# 👉 CREA UN ARCHIVO NUEVO EN LA RAÍZ DEL PROYECTO (MUY IMPORTANTE)
-# Nombre EXACTO:
-# test_main.py
-
-# Debe estar al mismo nivel que main.py (NO dentro de carpetas)
-
-# Contenido:
-"""
-def test_dummy():
-    assert True
-"""
-
-# ⚠️ SI NO FUNCIONA:
-# - Verifica que el nombre sea EXACTO: test_main.py
-# - Verifica que esté en la raíz del repo
-# - Haz commit y push otra vez
-
-def test_dummy():
-    assert True
-"""
-
-# Esto evita el error: "no tests ran"
-
-# =====================================================
-# EJECUCIÓN LOCAL (OPCIONAL)
-# =====================================================
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
-reload=True)
+# ================= WEBSOCKET ENDPOINT =================
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Mantiene la conexión viva
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
