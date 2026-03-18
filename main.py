@@ -3,24 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
+from fastapi.responses import FileResponse
 import os
 import json
-from fastapi.responses import FileResponse
 
-# Ruta principal: Muestra el menú de inicio
-@app.get("/")
-def home():
-    return FileResponse("home.html")
 
-# Ruta para la pantalla de la TV
-@app.get("/pantalla")
-def abrir_pantalla():
-    return FileResponse("index.html")
-
-# Ruta para el panel del operador
-@app.get("/operador")
-def abrir_panel():
-    return FileResponse("controlr.html")
 
 # ================= CONFIG & DB =================
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./digiturno.db")
@@ -120,3 +107,17 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+@app.get("/")
+async def home():
+    if os.path.exists("home.html"):
+        return FileResponse("home.html")
+    return {"error": "Archivo home.html no encontrado en el servidor"}
+
+@app.get("/pantalla")
+async def abrir_pantalla():
+    return FileResponse("index.html")
+
+@app.get("/operador")
+async def abrir_panel():
+    return FileResponse("control.html")
